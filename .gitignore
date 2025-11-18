@@ -1,0 +1,36 @@
+# Output files from searches
+search_results_*.csv
+*.csv
+
+# PowerShell temporary files
+*.tmp
+*.temp
+
+# Downloaded S3 files (if any)
+downloads/
+temp/
+
+# AWS credentials (never commit these!)
+.aws/
+credentials
+*.pem
+*.key
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Test data (optional - uncomment if you create test data)
+# test-data/
