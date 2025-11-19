@@ -1,4 +1,4 @@
-# Force CRLF line endings for PowerShell scripts on all platforms
-*.ps1 text eol=crlf
-*.psd1 text eol=crlf
-*.psm1 text eol=crlf
+# Force CRLF line endings for PowerShell scripts - stored as binary to preserve CRLF
+*.ps1 -text
+*.psd1 -text
+*.psm1 -text
