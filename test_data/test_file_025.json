@@ -1,0 +1,9 @@
+{
+  "id": 7065,
+  "name": "Bob",
+  "email": "bob520@example.com",
+  "age": 68,
+  "city": "Mumbai",
+  "active": false,
+  "score": 14.52
+}

@@ -1,0 +1,11 @@
+{
+  "event_id": 95122,
+  "event_type": "login",
+  "user": "Frank",
+  "location": "Berlin",
+  "timestamp": "2025-09-25T00:00:00",
+  "metadata": {
+    "browser": "Edge",
+    "device": "tablet"
+  }
+}

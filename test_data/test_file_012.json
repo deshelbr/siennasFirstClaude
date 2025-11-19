@@ -1,0 +1,11 @@
+{
+  "event_id": 49416,
+  "event_type": "click",
+  "user": "Eve",
+  "location": "Tokyo",
+  "timestamp": "2022-01-09T00:00:00",
+  "metadata": {
+    "browser": "Firefox",
+    "device": "tablet"
+  }
+}

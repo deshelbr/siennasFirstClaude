@@ -1,0 +1,9 @@
+{
+  "product_id": "PROD-11269",
+  "name": "laptop",
+  "price": 431.63,
+  "color": "blue",
+  "in_stock": false,
+  "quantity": 257,
+  "category": "computers"
+}

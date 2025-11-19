@@ -1,0 +1,20 @@
+{
+  "department": "Finance",
+  "data": {
+    "employees": 19,
+    "budget": 4417107.72,
+    "projects": [
+      {
+        "name": "Project-42",
+        "status": "inactive",
+        "priority": "low"
+      },
+      {
+        "name": "Project-99",
+        "status": "completed",
+        "priority": "critical"
+      }
+    ]
+  },
+  "last_updated": "2021-11-19T00:00:00"
+}

@@ -1,0 +1,20 @@
+{
+  "department": "Sales",
+  "data": {
+    "employees": 7,
+    "budget": 4586285.69,
+    "projects": [
+      {
+        "name": "Project-96",
+        "status": "cancelled",
+        "priority": "critical"
+      },
+      {
+        "name": "Project-23",
+        "status": "pending",
+        "priority": "high"
+      }
+    ]
+  },
+  "last_updated": "2023-04-24T00:00:00"
+}

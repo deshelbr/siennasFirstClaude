@@ -1,0 +1,11 @@
+{
+  "event_id": 99941,
+  "event_type": "login",
+  "user": "Charlie",
+  "location": "London",
+  "timestamp": "2024-09-07T00:00:00",
+  "metadata": {
+    "browser": "Edge",
+    "device": "tablet"
+  }
+}

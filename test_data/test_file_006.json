@@ -1,0 +1,20 @@
+{
+  "department": "HR",
+  "data": {
+    "employees": 82,
+    "budget": 2596857.09,
+    "projects": [
+      {
+        "name": "Project-37",
+        "status": "active",
+        "priority": "low"
+      },
+      {
+        "name": "Project-37",
+        "status": "active",
+        "priority": "medium"
+      }
+    ]
+  },
+  "last_updated": "2020-12-08T00:00:00"
+}

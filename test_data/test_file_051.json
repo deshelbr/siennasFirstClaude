@@ -1,0 +1,9 @@
+{
+  "product_id": "PROD-51055",
+  "name": "laptop",
+  "price": 1385.69,
+  "color": "orange",
+  "in_stock": false,
+  "quantity": 314,
+  "category": "computers"
+}

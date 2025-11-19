@@ -1,0 +1,11 @@
+{
+  "event_id": 19075,
+  "event_type": "purchase",
+  "user": "Frank",
+  "location": "London",
+  "timestamp": "2025-04-25T00:00:00",
+  "metadata": {
+    "browser": "Firefox",
+    "device": "mobile"
+  }
+}

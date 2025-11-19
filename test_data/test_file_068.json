@@ -1,0 +1,11 @@
+{
+  "event_id": 57879,
+  "event_type": "search",
+  "user": "Diana",
+  "location": "Berlin",
+  "timestamp": "2024-01-20T00:00:00",
+  "metadata": {
+    "browser": "Edge",
+    "device": "mobile"
+  }
+}

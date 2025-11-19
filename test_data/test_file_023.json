@@ -1,0 +1,9 @@
+{
+  "id": 2721,
+  "name": "Eve",
+  "email": "iris289@example.com",
+  "age": 71,
+  "city": "Seoul",
+  "active": false,
+  "score": 4.99
+}

@@ -1,0 +1,9 @@
+{
+  "product_id": "PROD-21775",
+  "name": "mouse",
+  "price": 879.17,
+  "color": "pink",
+  "in_stock": true,
+  "quantity": 149,
+  "category": "electronics"
+}

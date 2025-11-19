@@ -1,0 +1,9 @@
+{
+  "product_id": "PROD-39130",
+  "name": "laptop",
+  "price": 1890.56,
+  "color": "purple",
+  "in_stock": false,
+  "quantity": 423,
+  "category": "accessories"
+}

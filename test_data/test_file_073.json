@@ -1,0 +1,20 @@
+{
+  "department": "HR",
+  "data": {
+    "employees": 41,
+    "budget": 4022629.29,
+    "projects": [
+      {
+        "name": "Project-10",
+        "status": "processing",
+        "priority": "high"
+      },
+      {
+        "name": "Project-33",
+        "status": "processing",
+        "priority": "medium"
+      }
+    ]
+  },
+  "last_updated": "2020-09-24T00:00:00"
+}

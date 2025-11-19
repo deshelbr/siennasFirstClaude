@@ -1,0 +1,11 @@
+{
+  "event_id": 85681,
+  "event_type": "logout",
+  "user": "Diana",
+  "location": "New York",
+  "timestamp": "2022-04-29T00:00:00",
+  "metadata": {
+    "browser": "Edge",
+    "device": "mobile"
+  }
+}
