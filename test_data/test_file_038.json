@@ -1,0 +1,25 @@
+{
+  "department": "Sales",
+  "data": {
+    "employees": 78,
+    "budget": 911474.98,
+    "projects": [
+      {
+        "name": "Project-50",
+        "status": "pending",
+        "priority": "low"
+      },
+      {
+        "name": "Project-56",
+        "status": "processing",
+        "priority": "low"
+      },
+      {
+        "name": "Project-84",
+        "status": "completed",
+        "priority": "low"
+      }
+    ]
+  },
+  "last_updated": "2024-03-17T00:00:00"
+}

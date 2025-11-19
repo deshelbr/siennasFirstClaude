@@ -1,0 +1,9 @@
+{
+  "product_id": "PROD-55461",
+  "name": "laptop",
+  "price": 1533.23,
+  "color": "purple",
+  "in_stock": false,
+  "quantity": 183,
+  "category": "computers"
+}

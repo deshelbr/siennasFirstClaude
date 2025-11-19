@@ -1,0 +1,11 @@
+{
+  "event_id": 32608,
+  "event_type": "logout",
+  "user": "Frank",
+  "location": "Seoul",
+  "timestamp": "2021-03-12T00:00:00",
+  "metadata": {
+    "browser": "Safari",
+    "device": "tablet"
+  }
+}

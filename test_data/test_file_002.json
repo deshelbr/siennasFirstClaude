@@ -1,0 +1,9 @@
+{
+  "product_id": "PROD-16711",
+  "name": "tablet",
+  "price": 33.3,
+  "color": "red",
+  "in_stock": false,
+  "quantity": 287,
+  "category": "electronics"
+}

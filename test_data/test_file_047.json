@@ -1,0 +1,11 @@
+{
+  "event_id": 95310,
+  "event_type": "golden",
+  "user": "Charlie",
+  "location": "London",
+  "timestamp": "2023-04-27T00:00:00",
+  "metadata": {
+    "browser": "Edge",
+    "device": "desktop"
+  }
+}

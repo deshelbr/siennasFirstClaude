@@ -1,0 +1,25 @@
+{
+  "department": "Engineering",
+  "data": {
+    "employees": 23,
+    "budget": 2681256.54,
+    "projects": [
+      {
+        "name": "Project-42",
+        "status": "active",
+        "priority": "critical"
+      },
+      {
+        "name": "Project-42",
+        "status": "cancelled",
+        "priority": "critical"
+      },
+      {
+        "name": "Project-94",
+        "status": "active",
+        "priority": "low"
+      }
+    ]
+  },
+  "last_updated": "2025-12-15T00:00:00"
+}

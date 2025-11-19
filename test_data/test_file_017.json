@@ -1,0 +1,11 @@
+{
+  "event_id": 12291,
+  "event_type": "logout",
+  "user": "Alice",
+  "location": "Seoul",
+  "timestamp": "2023-09-07T00:00:00",
+  "metadata": {
+    "browser": "Edge",
+    "device": "tablet"
+  }
+}

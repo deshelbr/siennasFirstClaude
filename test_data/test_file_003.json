@@ -1,0 +1,11 @@
+{
+  "event_id": 54727,
+  "event_type": "login",
+  "user": "Bob",
+  "location": "Dubai",
+  "timestamp": "2025-03-09T00:00:00",
+  "metadata": {
+    "browser": "Chrome",
+    "device": "mobile"
+  }
+}

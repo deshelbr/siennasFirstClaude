@@ -1,0 +1,11 @@
+{
+  "event_id": 89371,
+  "event_type": "view",
+  "user": "Alice",
+  "location": "New York",
+  "timestamp": "2025-04-18T00:00:00",
+  "metadata": {
+    "browser": "Safari",
+    "device": "desktop"
+  }
+}

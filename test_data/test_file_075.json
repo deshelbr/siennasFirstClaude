@@ -1,0 +1,30 @@
+{
+  "department": "Finance",
+  "data": {
+    "employees": 82,
+    "budget": 3956911.66,
+    "projects": [
+      {
+        "name": "Project-70",
+        "status": "active",
+        "priority": "medium"
+      },
+      {
+        "name": "Project-25",
+        "status": "active",
+        "priority": "low"
+      },
+      {
+        "name": "Project-52",
+        "status": "active",
+        "priority": "low"
+      },
+      {
+        "name": "Project-87",
+        "status": "cancelled",
+        "priority": "low"
+      }
+    ]
+  },
+  "last_updated": "2022-05-06T00:00:00"
+}

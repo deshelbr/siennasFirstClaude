@@ -1,0 +1,11 @@
+{
+  "event_id": 21844,
+  "event_type": "login",
+  "user": "Jack",
+  "location": "Seoul",
+  "timestamp": "2020-10-13T00:00:00",
+  "metadata": {
+    "browser": "Chrome",
+    "device": "desktop"
+  }
+}
