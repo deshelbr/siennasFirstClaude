@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 <#
 .SYNOPSIS
     Interactive wrapper for S3 JSON search tool
@@ -13,16 +13,14 @@ param(
 )
 
 Write-Host ""
-Write-Host "╔════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║   S3 JSON File Search - Quick Start   ║" -ForegroundColor Cyan
-Write-Host "╚════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "S3 JSON File Search - Quick Start" -ForegroundColor Cyan
 Write-Host ""
 
 # Gather inputs
 $bucketName = Read-Host "Enter S3 bucket name"
-$prefix = Read-Host "Enter prefix/directory path (e.g., 'data/' or leave empty)"
+$prefix = Read-Host "Enter prefix/directory path (e.g. data/ or leave empty)"
 $searchString = Read-Host "Enter the string to search for"
-$targetDate = Read-Host "Enter target date (yyyy-MM-dd, e.g., 2025-10-18)"
+$targetDate = Read-Host "Enter target date (yyyy-MM-dd e.g. 2025-10-18)"
 
 Write-Host ""
 Write-Host "Optional settings (press Enter to use defaults):" -ForegroundColor Yellow
@@ -56,10 +54,10 @@ if ($confirmation -eq 'n' -or $confirmation -eq 'N') {
 }
 
 # Execute appropriate script
-$scriptPath = if ($UseAdvanced) {
-    "./Search-S3JsonFiles-Advanced.ps1"
+if ($UseAdvanced) {
+    $scriptPath = "./Search-S3JsonFiles-Advanced.ps1"
 } else {
-    "./Search-S3JsonFiles.ps1"
+    $scriptPath = "./Search-S3JsonFiles.ps1"
 }
 
 $params = @{
