@@ -75,16 +75,23 @@ The tool operates in three distinct phases:
 
 ### Performance Characteristics
 
+**PowerShell Version Impact:**
+- **PowerShell 5.1**: Sequential processing (one file at a time)
+- **PowerShell 7+**: Parallel processing (multiple files simultaneously)
+- Scripts automatically detect version and use appropriate method
+
 **Standard Search Method:**
-- Processing time: 2-5 minutes for ~500 files (post date-filter)
+- Processing time (PS 7+): 2-5 minutes for ~500 files (post date-filter)
+- Processing time (PS 5.1): 5-15 minutes for ~500 files (sequential)
 - Network usage: Downloads all candidate files
-- Parallelism: Configurable (default 10 concurrent threads)
+- Parallelism: Configurable (default 10 concurrent threads, PS 7+ only)
 - Reliability: High - works with any valid JSON
 
 **Advanced Search Method (S3 Select):**
-- Processing time: 30 seconds - 2 minutes for ~500 files
+- Processing time (PS 7+): 30 seconds - 2 minutes for ~500 files
+- Processing time (PS 5.1): 2-5 minutes for ~500 files (sequential)
 - Network usage: Minimal - queries executed server-side
-- Parallelism: Configurable (default 20 concurrent threads)
+- Parallelism: Configurable (default 20 concurrent threads, PS 7+ only)
 - Reliability: Requires well-formed JSON; auto-fallback to download on failures
 
 ### Data Flow & Security
@@ -103,7 +110,7 @@ The tool operates in three distinct phases:
 | Component | Requirement | Details |
 |-----------|-------------|---------|
 | **Operating System** | Windows 10/11 or Windows Server 2016+ | Any modern Windows with PowerShell support |
-| **PowerShell Version** | PowerShell 5.1+ (PowerShell 7+ recommended) | Included in modern Windows; v7+ provides better performance |
+| **PowerShell Version** | PowerShell 5.1+ or PowerShell 7+ | **5.1**: Sequential processing (slower, compatible)<br>**7+**: Parallel processing (faster, recommended) |
 | **Execution Policy** | RemoteSigned or Unrestricted | Required to run downloaded scripts |
 
 ### User Account Permissions
@@ -478,6 +485,16 @@ Total Cost per Search:                        ~$0.002
 
 ### Common Issues & Resolutions
 
+#### Issue: "Parameter set cannot be resolved" Error
+**Cause**: Running script with PowerShell 5.1 (older versions had compatibility issue)
+**Resolution**:
+- **Fixed in latest version**: Scripts now auto-detect PowerShell version
+- PowerShell 5.1 uses sequential processing (works but slower)
+- Upgrade to PowerShell 7+ for parallel processing and better performance
+- Download PowerShell 7+: https://github.com/PowerShell/PowerShell/releases
+
+**Note**: This issue was resolved in commit 62b125e (December 2025)
+
 #### Issue: "Access Denied" Errors
 **Cause**: Insufficient IAM permissions
 **Resolution**:
@@ -486,12 +503,13 @@ Total Cost per Search:                        ~$0.002
 3. Validate credentials are configured: `Get-AWSCredential -ProfileName default`
 
 #### Issue: Slow Performance
-**Cause**: Network latency or too many files after date filter
+**Cause**: Using PowerShell 5.1, network latency, or too many files after date filter
 **Resolution**:
-1. Increase MaxParallel parameter: `-MaxParallel 20`
-2. Use Advanced script with S3 Select
-3. Run from EC2 instance in same AWS region as bucket
-4. Verify date filter is correctly narrowing file set
+1. **Upgrade to PowerShell 7+** for parallel processing (fastest improvement)
+2. Increase MaxParallel parameter (PS 7+ only): `-MaxParallel 20`
+3. Use Advanced script with S3 Select
+4. Run from EC2 instance in same AWS region as bucket
+5. Verify date filter is correctly narrowing file set
 
 #### Issue: S3 Select Failures
 **Cause**: Malformed JSON files
@@ -589,6 +607,9 @@ A: Yes, can be called from scheduled tasks or automation platforms (Jenkins, etc
 **Q: Does it require internet access?**
 A: Yes, requires outbound HTTPS to AWS endpoints. Can work via corporate proxy if AWS PowerShell module is configured for proxy.
 
+**Q: What's the difference between PowerShell 5.1 and 7+ for this tool?**
+A: PowerShell 5.1 works but processes files sequentially (one at a time). PowerShell 7+ uses parallel processing (multiple files simultaneously) for 3-5x faster searches. The scripts automatically detect the version and use the appropriate method.
+
 ---
 
 ## 11. Recommendations for IT Managers
@@ -608,12 +629,13 @@ A: Yes, requires outbound HTTPS to AWS endpoints. Can work via corporate proxy i
 ### Best Practices
 
 1. **Start Small**: Pilot with a single team/department before org-wide rollout
-2. **Use IAM Roles**: Prefer roles over access keys for better security
-3. **Implement MFA**: Require MFA for access to sensitive S3 buckets
-4. **Monitor Costs**: Track AWS costs; set billing alerts if usage exceeds expectations
-5. **Version Control Scripts**: Store approved versions in controlled repository
-6. **Document Changes**: Maintain changelog for any script modifications
-7. **Regular Updates**: Monitor for AWS PowerShell module updates
+2. **Recommend PowerShell 7+**: Deploy PowerShell 7+ for better performance (3-5x faster)
+3. **Use IAM Roles**: Prefer roles over access keys for better security
+4. **Implement MFA**: Require MFA for access to sensitive S3 buckets
+5. **Monitor Costs**: Track AWS costs; set billing alerts if usage exceeds expectations
+6. **Version Control Scripts**: Store approved versions in controlled repository
+7. **Document Changes**: Maintain changelog for any script modifications (see CLAUDE.md)
+8. **Regular Updates**: Monitor for AWS PowerShell module updates
 
 ### Risk Assessment
 
@@ -644,10 +666,33 @@ The S3 JSON File Search Tool provides a secure, cost-effective solution for sear
 
 ---
 
+## 13. Recent Changes & Updates
+
+### December 2025 Updates
+
+**Version 1.1** - PowerShell 5.1 Compatibility & Bug Fixes
+
+**Changes:**
+- ✅ **Full PowerShell 5.1 Support**: Scripts now work with both PowerShell 5.1 (sequential) and 7+ (parallel)
+- ✅ **Automatic Version Detection**: Scripts detect PowerShell version and use appropriate processing method
+- ✅ **Performance Notifications**: Users notified when running on PS 5.1 with suggestion to upgrade
+- ✅ **Bug Fix**: Resolved "Parameter set cannot be resolved" error in Search-S3JsonFiles.ps1
+- ✅ **Bug Fix**: Fixed PowerShell encoding issue in Run-Search.ps1
+- ✅ **Documentation**: Added CLAUDE.md for future AI-assisted maintenance
+
+**Commits:**
+- `62b125e` - Add PowerShell 5.1 compatibility to search scripts
+- `bf3ac8e` - Fix PowerShell encoding issue in Run-Search.ps1
+- `64cd399` - Add CLAUDE.md documentation for future Claude instances
+
+**Upgrade Recommendation**: Existing deployments should update to latest version for PowerShell 5.1 compatibility. No breaking changes.
+
+---
+
 ## Document Information
 
-**Version**: 1.0
-**Last Updated**: 2025-11-21
+**Version**: 1.1
+**Last Updated**: 2025-12-01
 **Maintained By**: IT Infrastructure Team
 **Review Cycle**: Quarterly
 
