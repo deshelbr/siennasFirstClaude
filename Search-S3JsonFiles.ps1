@@ -52,6 +52,20 @@ param(
 # Set error action preference
 $ErrorActionPreference = "Stop"
 
+# Check PowerShell version
+$psVersion = $PSVersionTable.PSVersion.Major
+if ($psVersion -lt 5) {
+    Write-Error "This script requires PowerShell 5.1 or later. Current version: $($PSVersionTable.PSVersion)"
+    exit 1
+}
+
+$useParallel = $psVersion -ge 7
+
+if (-not $useParallel) {
+    Write-Host "Note: Using PowerShell $psVersion - parallel processing disabled. For faster searches, use PowerShell 7+ (pwsh)" -ForegroundColor Yellow
+    Write-Host ""
+}
+
 # Parse target date
 $targetDateTime = [DateTime]::ParseExact($TargetDate, "yyyy-MM-dd", $null)
 $startOfDay = $targetDateTime.Date
@@ -114,58 +128,97 @@ if ($filteredKeys.Count -eq 0) {
     exit 0
 }
 
-# Step 2: Search through filtered files in parallel
-Write-Host "[2/3] Searching file contents in parallel (max $MaxParallel threads)..." -ForegroundColor Yellow
+# Step 2: Search through filtered files
+if ($useParallel) {
+    Write-Host "[2/3] Searching file contents in parallel (max $MaxParallel threads)..." -ForegroundColor Yellow
+} else {
+    Write-Host "[2/3] Searching file contents sequentially..." -ForegroundColor Yellow
+}
 
 $matchingFiles = [System.Collections.Concurrent.ConcurrentBag[PSCustomObject]]::new()
 $processed = 0
-$mutex = [System.Threading.Mutex]::new($false)
 
-$filteredKeys | ForEach-Object -Parallel {
-    $key = $_
-    $bucket = $using:BucketName
-    $region = $using:Region
-    $search = $using:SearchString
-    $bag = $using:matchingFiles
-    $mut = $using:mutex
-    $proc = $using:processed
-    
-    try {
-        # Download file content
-        $response = Read-S3Object -BucketName $bucket -Key $key -Region $region
-        
-        # Read content
-        $content = Get-Content -Path $response -Raw -ErrorAction SilentlyContinue
-        
-        # Search for string
-        if ($content -and $content.Contains($search)) {
-            $result = [PSCustomObject]@{
-                Key = $key
-                Size = (Get-Item $response).Length
-                Found = $true
+if ($useParallel) {
+    # PowerShell 7+ parallel processing
+    $filteredKeys | ForEach-Object -Parallel {
+        # Import AWS module in parallel context
+        Import-Module AWS.Tools.S3 -ErrorAction SilentlyContinue
+
+        $key = $_
+        $bucket = $using:BucketName
+        $search = $using:SearchString
+        $bag = $using:matchingFiles
+
+        try {
+            # Download file content to temp location
+            $tempFile = [System.IO.Path]::GetTempFileName()
+            $null = Read-S3Object -BucketName $bucket -Key $key -File $tempFile
+
+            # Read content
+            $content = Get-Content -Path $tempFile -Raw -ErrorAction SilentlyContinue
+
+            # Search for string
+            if ($content -and $content.Contains($search)) {
+                $result = [PSCustomObject]@{
+                    Key = $key
+                    Size = (Get-Item $tempFile).Length
+                    Found = $true
+                }
+                $bag.Add($result)
             }
-            $bag.Add($result)
+
+            # Clean up temp file
+            if (Test-Path $tempFile) {
+                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+            }
+
+            # Update progress
+            $script:processed++
+            if ($script:processed % 50 -eq 0) {
+                Write-Host "    Processed $($script:processed) / $($using:filteredKeys.Count) files..." -ForegroundColor Gray
+            }
+
+        } catch {
+            Write-Warning "Error processing $key : $_"
         }
-        
-        # Clean up temp file
-        if (Test-Path $response) {
-            Remove-Item $response -Force -ErrorAction SilentlyContinue
+    } -ThrottleLimit $MaxParallel
+} else {
+    # PowerShell 5.1 sequential processing
+    foreach ($key in $filteredKeys) {
+        try {
+            # Download file content to temp location
+            $tempFile = [System.IO.Path]::GetTempFileName()
+            $null = Read-S3Object -BucketName $BucketName -Key $key -File $tempFile
+
+            # Read content
+            $content = Get-Content -Path $tempFile -Raw -ErrorAction SilentlyContinue
+
+            # Search for string
+            if ($content -and $content.Contains($SearchString)) {
+                $result = [PSCustomObject]@{
+                    Key = $key
+                    Size = (Get-Item $tempFile).Length
+                    Found = $true
+                }
+                $matchingFiles.Add($result)
+            }
+
+            # Clean up temp file
+            if (Test-Path $tempFile) {
+                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+            }
+
+            # Update progress
+            $processed++
+            if ($processed % 50 -eq 0) {
+                Write-Host "    Processed $processed / $($filteredKeys.Count) files..." -ForegroundColor Gray
+            }
+
+        } catch {
+            Write-Warning "Error processing $key : $_"
         }
-        
-        # Update progress
-        $null = $mut.WaitOne()
-        $script:processed++
-        $currentProgress = $script:processed
-        $mut.ReleaseMutex()
-        
-        if ($currentProgress % 50 -eq 0) {
-            Write-Host "    Processed $currentProgress / $($using:filteredKeys.Count) files..." -ForegroundColor Gray
-        }
-        
-    } catch {
-        Write-Warning "Error processing $key : $_"
     }
-} -ThrottleLimit $MaxParallel
+}
 
 Write-Host "  Completed searching $($filteredKeys.Count) files" -ForegroundColor Green
 Write-Host ""

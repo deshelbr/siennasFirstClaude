@@ -38,27 +38,27 @@
 #>
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$true, Position=0)]
     [string]$BucketName,
-    
-    [Parameter(Mandatory=$true)]
+
+    [Parameter(Mandatory=$true, Position=1)]
     [string]$Prefix,
-    
-    [Parameter(Mandatory=$true)]
+
+    [Parameter(Mandatory=$true, Position=2)]
     [string]$SearchString,
-    
-    [Parameter(Mandatory=$true)]
+
+    [Parameter(Mandatory=$true, Position=3)]
     [string]$TargetDate,
-    
+
     [Parameter(Mandatory=$false)]
     [string]$JsonPath,
-    
+
     [Parameter(Mandatory=$false)]
     [string]$Region = "us-west-1",
-    
+
     [Parameter(Mandatory=$false)]
-    [bool]$UseS3Select = $true,
-    
+    [switch]$UseS3Select,
+
     [Parameter(Mandatory=$false)]
     [int]$MaxParallel = 20
 )
@@ -105,10 +105,10 @@ do {
     
     try {
         $objects = Get-S3Object @listParams
-        
-        foreach ($obj in $objects.S3Objects) {
+
+        foreach ($obj in $objects) {
             $totalObjects++
-            
+
             if ($obj.LastModified -ge $startOfDay -and $obj.LastModified -le $endOfDay) {
                 if ($obj.Key -match '\.json$') {
                     $filteredKeys += [PSCustomObject]@{
@@ -119,7 +119,7 @@ do {
                 }
             }
         }
-        
+
         $continuationToken = $objects.NextContinuationToken
         
         if ($totalObjects % 5000 -eq 0) {
@@ -148,83 +148,13 @@ Write-Host "[2/3] Searching file contents..." -ForegroundColor Yellow
 $matchingFiles = [System.Collections.Concurrent.ConcurrentBag[PSCustomObject]]::new()
 $failedS3Select = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
 
-function Search-WithS3Select {
-    param($Key, $Bucket, $Region, $SearchStr, $Path)
-    
-    # Build S3 Select query
-    if ($Path) {
-        $expression = "SELECT * FROM S3Object[*] s WHERE $Path LIKE '%$SearchStr%'"
-    } else {
-        # Search entire document (converted to string)
-        $expression = "SELECT * FROM S3Object[*] s"
-    }
-    
-    try {
-        $selectParams = @{
-            BucketName = $Bucket
-            Key = $Key
-            Region = $Region
-            Expression = $expression
-            ExpressionType = 'SQL'
-            InputSerialization_JSON_Type = 'DOCUMENT'
-            OutputSerialization_JSON_RecordDelimiter = "`n"
-        }
-        
-        # Execute S3 Select
-        $result = Select-S3ObjectContent @selectParams -Select @{
-            Expression = $expression
-            ExpressionType = 'SQL'
-            InputSerialization = @{
-                JSON = @{ Type = 'DOCUMENT' }
-                CompressionType = 'NONE'
-            }
-            OutputSerialization = @{
-                JSON = @{ RecordDelimiter = "`n" }
-            }
-        }
-        
-        if ($result -and $result.Payload) {
-            # If we got results, the file contains our search string
-            return $true
-        }
-        
-        return $false
-        
-    } catch {
-        # S3 Select failed, mark for fallback
-        return $null
-    }
-}
-
-function Search-WithDownload {
-    param($Key, $Bucket, $Region, $SearchStr)
-    
-    try {
-        # Create temp file
-        $tempFile = [System.IO.Path]::GetTempFileName()
-        
-        # Download
-        Read-S3Object -BucketName $Bucket -Key $Key -File $tempFile -Region $Region | Out-Null
-        
-        # Search content
-        $content = Get-Content -Path $tempFile -Raw
-        $found = $content.Contains($SearchStr)
-        
-        # Cleanup
-        Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
-        
-        return $found
-        
-    } catch {
-        Write-Warning "Error downloading $Key : $_"
-        return $false
-    }
-}
-
 # Process files in parallel
 $processed = 0
 
 $filteredKeys | ForEach-Object -Parallel {
+    # Import AWS module in parallel context
+    Import-Module AWS.Tools.S3 -ErrorAction SilentlyContinue
+
     $fileObj = $_
     $bucket = $using:BucketName
     $region = $using:Region
@@ -233,22 +163,55 @@ $filteredKeys | ForEach-Object -Parallel {
     $useSelect = $using:UseS3Select
     $matches = $using:matchingFiles
     $failed = $using:failedS3Select
-    
+
     $found = $false
-    
+
     # Try S3 Select first if enabled
     if ($useSelect) {
-        $found = & $using:Search-WithS3Select -Key $fileObj.Key -Bucket $bucket -Region $region -SearchStr $search -Path $jsonPath
-        
-        # If S3 Select returned null (failed), fall back to download
-        if ($null -eq $found) {
+        try {
+            # Build S3 Select query
+            if ($jsonPath) {
+                $expression = "SELECT * FROM S3Object[*] s WHERE $jsonPath LIKE '%$search%'"
+            } else {
+                $expression = "SELECT * FROM S3Object[*] s"
+            }
+
+            $selectParams = @{
+                BucketName = $bucket
+                Key = $fileObj.Key
+                Expression = $expression
+                ExpressionType = 'SQL'
+                InputSerialization_JSON_Type = 'DOCUMENT'
+                InputSerialization_CompressionType = 'NONE'
+                OutputSerialization_JSON_RecordDelimiter = "`n"
+            }
+
+            $result = Select-S3ObjectContent @selectParams
+
+            if ($result -and $result.Payload) {
+                $found = $true
+            }
+        } catch {
+            # S3 Select failed, fall back to download
             $failed.Add($fileObj.Key)
-            $found = & $using:Search-WithDownload -Key $fileObj.Key -Bucket $bucket -Region $region -SearchStr $search
+            $found = $null
         }
-    } else {
-        $found = & $using:Search-WithDownload -Key $fileObj.Key -Bucket $bucket -Region $region -SearchStr $search
     }
-    
+
+    # Fall back to download if S3 Select not used or failed
+    if ($null -eq $found) {
+        try {
+            $tempFile = [System.IO.Path]::GetTempFileName()
+            Read-S3Object -BucketName $bucket -Key $fileObj.Key -File $tempFile > $null
+            $content = Get-Content -Path $tempFile -Raw
+            $found = $content.Contains($search)
+            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+        } catch {
+            Write-Warning "Error processing $($fileObj.Key): $_"
+            $found = $false
+        }
+    }
+
     if ($found) {
         $matches.Add([PSCustomObject]@{
             Key = $fileObj.Key
@@ -256,13 +219,13 @@ $filteredKeys | ForEach-Object -Parallel {
             LastModified = $fileObj.LastModified
         })
     }
-    
+
     # Progress update
     $script:processed++
     if ($script:processed % 100 -eq 0) {
         Write-Host "    Processed $($script:processed) / $($using:filteredKeys.Count) files..." -ForegroundColor Gray
     }
-    
+
 } -ThrottleLimit $MaxParallel
 
 Write-Host "  Completed searching $($filteredKeys.Count) files" -ForegroundColor Green
