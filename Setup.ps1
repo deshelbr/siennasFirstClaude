@@ -5,13 +5,39 @@
 
 .DESCRIPTION
     Installs prerequisites and configures AWS credentials
+
+.PARAMETER Region
+    AWS region to use for credential validation (default: us-east-1)
+
+.PARAMETER Debug
+    Enable detailed debug logging
+
+.EXAMPLE
+    ./Setup.ps1
+
+.EXAMPLE
+    ./Setup.ps1 -Region us-west-2
+
+.EXAMPLE
+    ./Setup.ps1 -Region us-east-1 -Debug
 #>
+
+param(
+    [string]$Region = "us-east-1",
+    [switch]$Debug
+)
 
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Cyan
 Write-Host "║  S3 JSON Search Tool - Setup & Install  ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
+
+if ($Debug) {
+    Write-Host "[DEBUG] Region: $Region" -ForegroundColor DarkGray
+    Write-Host "[DEBUG] Debug mode enabled" -ForegroundColor DarkGray
+    Write-Host ""
+}
 
 # Check PowerShell version
 $psVersion = $PSVersionTable.PSVersion
@@ -62,19 +88,39 @@ Write-Host "Checking AWS credentials..." -ForegroundColor Yellow
 $configureCredentials = $false
 
 try {
+    if ($Debug) {
+        Write-Host "[DEBUG] Looking for AWS credential profile 'default'" -ForegroundColor DarkGray
+    }
+
     $credentials = Get-AWSCredential -ProfileName default -ErrorAction SilentlyContinue
     if ($credentials) {
         Write-Host "✓ AWS credentials found (profile: default)" -ForegroundColor Green
-        
+
+        if ($Debug) {
+            Write-Host "[DEBUG] Access Key ID: $($credentials.GetCredentials().AccessKey)" -ForegroundColor DarkGray
+        }
+
         # Test credentials
         Write-Host "Testing credentials..." -ForegroundColor Yellow
-        $caller = Get-STSCallerIdentity -Region us-east-1 -ErrorAction Stop
+        if ($Debug) {
+            Write-Host "[DEBUG] Calling Get-STSCallerIdentity with region: $Region" -ForegroundColor DarkGray
+        }
+
+        $caller = Get-STSCallerIdentity -Region $Region -ErrorAction Stop
         Write-Host "✓ Credentials valid - Account: $($caller.Account), User: $($caller.Arn.Split('/')[-1])" -ForegroundColor Green
     } else {
+        if ($Debug) {
+            Write-Host "[DEBUG] No credentials found in profile 'default'" -ForegroundColor DarkGray
+        }
         $configureCredentials = $true
     }
 } catch {
     Write-Host "! No valid AWS credentials found" -ForegroundColor Yellow
+    if ($Debug) {
+        Write-Host "[DEBUG] Error type: $($_.Exception.GetType().FullName)" -ForegroundColor DarkGray
+        Write-Host "[DEBUG] Error message: $($_.Exception.Message)" -ForegroundColor DarkGray
+        Write-Host "[DEBUG] Error details: $_" -ForegroundColor DarkGray
+    }
     $configureCredentials = $true
 }
 
@@ -87,26 +133,62 @@ if ($configureCredentials) {
     if ($configure -ne 'n' -and $configure -ne 'N') {
         Write-Host ""
         Write-Host "Enter your AWS credentials:" -ForegroundColor Cyan
-        
+
         $accessKey = Read-Host "AWS Access Key ID"
         $secretKey = Read-Host "AWS Secret Access Key" -AsSecureString
-        
+
         try {
+            if ($Debug) {
+                Write-Host "[DEBUG] Converting secure string to plain text" -ForegroundColor DarkGray
+            }
+
             $secretKeyPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
                 [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secretKey)
             )
-            
+
+            if ($Debug) {
+                Write-Host "[DEBUG] Access Key ID length: $($accessKey.Length) characters" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Secret Key length: $($secretKeyPlain.Length) characters" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Access Key ID: $accessKey" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Calling Set-AWSCredential with profile 'default'" -ForegroundColor DarkGray
+            }
+
             Set-AWSCredential -AccessKey $accessKey -SecretKey $secretKeyPlain -StoreAs default
-            
+
             Write-Host "✓ Credentials saved successfully" -ForegroundColor Green
-            
+
             # Test new credentials
             Write-Host "Testing credentials..." -ForegroundColor Yellow
-            $caller = Get-STSCallerIdentity -Region us-east-1 -ErrorAction Stop
+            if ($Debug) {
+                Write-Host "[DEBUG] Calling Get-STSCallerIdentity with region: $Region" -ForegroundColor DarkGray
+            }
+
+            $caller = Get-STSCallerIdentity -Region $Region -ErrorAction Stop
             Write-Host "✓ Credentials valid - Account: $($caller.Account)" -ForegroundColor Green
-            
+
         } catch {
             Write-Host "✗ Error saving credentials: $_" -ForegroundColor Red
+
+            if ($Debug) {
+                Write-Host "" -ForegroundColor Red
+                Write-Host "[DEBUG] Full error details:" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Error type: $($_.Exception.GetType().FullName)" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Error message: $($_.Exception.Message)" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Stack trace:" -ForegroundColor DarkGray
+                Write-Host $_.Exception.StackTrace -ForegroundColor DarkGray
+
+                if ($_.Exception.InnerException) {
+                    Write-Host "[DEBUG] Inner exception: $($_.Exception.InnerException.Message)" -ForegroundColor DarkGray
+                }
+
+                Write-Host "" -ForegroundColor Red
+                Write-Host "Troubleshooting tips:" -ForegroundColor Yellow
+                Write-Host "  1. Verify Access Key ID has no spaces: '$accessKey'" -ForegroundColor White
+                Write-Host "  2. Check Access Key ID length (should be 20 chars): $($accessKey.Length)" -ForegroundColor White
+                Write-Host "  3. Check Secret Key length (should be 40 chars): $($secretKeyPlain.Length)" -ForegroundColor White
+                Write-Host "  4. Verify the key is Active in AWS IAM Console" -ForegroundColor White
+                Write-Host "  5. Try a different region: ./Setup.ps1 -Region us-west-2 -Debug" -ForegroundColor White
+            }
         }
     }
 }
@@ -115,6 +197,9 @@ Write-Host ""
 Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host "Setup Complete!" -ForegroundColor Green
 Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Configuration:" -ForegroundColor Cyan
+Write-Host "  Region: $Region" -ForegroundColor White
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Run: ./Run-Search.ps1" -ForegroundColor White
@@ -125,6 +210,10 @@ Write-Host "     ./Search-S3JsonFiles.ps1 -BucketName 'mybucket' -Prefix 'data/'
 Write-Host ""
 Write-Host "  3. For advanced features (S3 Select):" -ForegroundColor White
 Write-Host "     ./Search-S3JsonFiles-Advanced.ps1 -BucketName 'mybucket' -Prefix 'data/' -SearchString 'text' -TargetDate '2025-10-18'" -ForegroundColor Gray
+Write-Host ""
+Write-Host "Setup Options:" -ForegroundColor Cyan
+Write-Host "  ./Setup.ps1 -Region <region>           # Use different AWS region" -ForegroundColor Gray
+Write-Host "  ./Setup.ps1 -Debug                     # Enable debug logging" -ForegroundColor Gray
 Write-Host ""
 Write-Host "See README.md for full documentation" -ForegroundColor Cyan
 Write-Host ""
