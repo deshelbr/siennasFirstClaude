@@ -23,30 +23,35 @@ if ($psVersion.Major -lt 7) {
     Write-Host ""
 }
 
-# Check if AWS.Tools.S3 is installed
+# Check if AWS.Tools modules are installed
 Write-Host "Checking AWS PowerShell modules..." -ForegroundColor Yellow
 
 $s3Module = Get-Module -ListAvailable -Name AWS.Tools.S3
-if (-not $s3Module) {
-    Write-Host "AWS.Tools.S3 module not found. Installing..." -ForegroundColor Yellow
-    
+$stsModule = Get-Module -ListAvailable -Name AWS.Tools.SecurityToken
+
+if (-not $s3Module -or -not $stsModule) {
+    Write-Host "Required AWS modules not found. Installing..." -ForegroundColor Yellow
+
     try {
         # Install AWS.Tools.Installer first
         Install-Module -Name AWS.Tools.Installer -Force -AllowClobber -Scope CurrentUser
-        
-        # Install S3 module
-        Install-AWSToolsModule AWS.Tools.S3 -Force -AllowClobber
-        
+
+        # Install required modules
+        Install-AWSToolsModule AWS.Tools.S3,AWS.Tools.SecurityToken -Force -AllowClobber
+
         Write-Host "✓ AWS.Tools.S3 installed successfully" -ForegroundColor Green
+        Write-Host "✓ AWS.Tools.SecurityToken installed successfully" -ForegroundColor Green
     } catch {
-        Write-Host "✗ Error installing AWS.Tools.S3: $_" -ForegroundColor Red
+        Write-Host "✗ Error installing AWS modules: $_" -ForegroundColor Red
         Write-Host ""
         Write-Host "Please install manually:" -ForegroundColor Yellow
         Write-Host "  Install-Module -Name AWS.Tools.S3 -Force" -ForegroundColor White
+        Write-Host "  Install-Module -Name AWS.Tools.SecurityToken -Force" -ForegroundColor White
         exit 1
     }
 } else {
     Write-Host "✓ AWS.Tools.S3 module found (version $($s3Module.Version))" -ForegroundColor Green
+    Write-Host "✓ AWS.Tools.SecurityToken module found (version $($stsModule.Version))" -ForegroundColor Green
 }
 
 Write-Host ""
