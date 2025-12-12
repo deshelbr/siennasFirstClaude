@@ -68,7 +68,7 @@ try {
         
         # Test credentials
         Write-Host "Testing credentials..." -ForegroundColor Yellow
-        $caller = Get-STSCallerIdentity -ErrorAction Stop
+        $caller = Get-STSCallerIdentity -Region us-east-1 -ErrorAction Stop
         Write-Host "✓ Credentials valid - Account: $($caller.Account), User: $($caller.Arn.Split('/')[-1])" -ForegroundColor Green
     } else {
         $configureCredentials = $true
@@ -102,7 +102,7 @@ if ($configureCredentials) {
             
             # Test new credentials
             Write-Host "Testing credentials..." -ForegroundColor Yellow
-            $caller = Get-STSCallerIdentity -ErrorAction Stop
+            $caller = Get-STSCallerIdentity -Region us-east-1 -ErrorAction Stop
             Write-Host "✓ Credentials valid - Account: $($caller.Account)" -ForegroundColor Green
             
         } catch {
