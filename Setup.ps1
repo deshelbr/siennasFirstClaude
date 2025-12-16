@@ -200,14 +200,49 @@ if ($configureCredentials) {
             )
 
             if ($Debug) {
+                Write-Host "[DEBUG] ========== CREDENTIAL VALIDATION ==========" -ForegroundColor DarkGray
                 Write-Host "[DEBUG] Access Key ID length: $($accessKey.Length) characters" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Access Key ID first 8 chars: $($accessKey.Substring(0, [Math]::Min(8, $accessKey.Length)))" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Access Key ID last 4 chars: $($accessKey.Substring([Math]::Max(0, $accessKey.Length - 4)))" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Access Key ID (full): $accessKey" -ForegroundColor DarkGray
+
                 Write-Host "[DEBUG] Secret Key length: $($secretKeyPlain.Length) characters" -ForegroundColor DarkGray
-                Write-Host "[DEBUG] Access Key ID: $accessKey" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Secret Key first 4 chars: $($secretKeyPlain.Substring(0, [Math]::Min(4, $secretKeyPlain.Length)))" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Secret Key last 4 chars: $($secretKeyPlain.Substring([Math]::Max(0, $secretKeyPlain.Length - 4)))" -ForegroundColor DarkGray
+
                 Write-Host "[DEBUG] Credential type: $(if ($isTemporary) { 'Temporary (ASIA)' } else { 'Permanent (AKIA)' })" -ForegroundColor DarkGray
+
                 if ($isTemporary) {
                     Write-Host "[DEBUG] Session Token length: $($sessionToken.Length) characters" -ForegroundColor DarkGray
+                    Write-Host "[DEBUG] Session Token first 20 chars: $($sessionToken.Substring(0, [Math]::Min(20, $sessionToken.Length)))" -ForegroundColor DarkGray
+                    Write-Host "[DEBUG] Session Token last 20 chars: $($sessionToken.Substring([Math]::Max(0, $sessionToken.Length - 20)))" -ForegroundColor DarkGray
+
+                    # Check for common issues
+                    $hasLeadingSpace = $sessionToken.StartsWith(" ")
+                    $hasTrailingSpace = $sessionToken.EndsWith(" ")
+                    $hasLineBreaks = $sessionToken.Contains("`n") -or $sessionToken.Contains("`r")
+                    $hasTabs = $sessionToken.Contains("`t")
+
+                    Write-Host "[DEBUG] Session Token has leading space: $hasLeadingSpace" -ForegroundColor DarkGray
+                    Write-Host "[DEBUG] Session Token has trailing space: $hasTrailingSpace" -ForegroundColor DarkGray
+                    Write-Host "[DEBUG] Session Token has line breaks: $hasLineBreaks" -ForegroundColor DarkGray
+                    Write-Host "[DEBUG] Session Token has tabs: $hasTabs" -ForegroundColor DarkGray
+
+                    if ($hasLeadingSpace -or $hasTrailingSpace -or $hasLineBreaks -or $hasTabs) {
+                        Write-Host "[DEBUG] ⚠ WARNING: Session token contains whitespace characters that may cause issues!" -ForegroundColor Yellow
+
+                        # Clean the token
+                        $cleanedToken = $sessionToken.Trim() -replace "`n", "" -replace "`r", "" -replace "`t", ""
+                        if ($cleanedToken.Length -ne $sessionToken.Length) {
+                            Write-Host "[DEBUG] Cleaned token length: $($cleanedToken.Length) (removed $($sessionToken.Length - $cleanedToken.Length) chars)" -ForegroundColor DarkGray
+                            $sessionToken = $cleanedToken
+                            Write-Host "[DEBUG] Using cleaned session token" -ForegroundColor Yellow
+                        }
+                    }
                 }
+
                 Write-Host "[DEBUG] Using region: $selectedRegion" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] =========================================" -ForegroundColor DarkGray
                 Write-Host "[DEBUG] Calling Set-AWSCredential with profile 'default'" -ForegroundColor DarkGray
             }
 
@@ -220,46 +255,102 @@ if ($configureCredentials) {
 
             Write-Host "✓ Credentials saved successfully" -ForegroundColor Green
 
+            # Verify credentials were saved correctly
+            if ($Debug) {
+                Write-Host "[DEBUG] Verifying saved credentials..." -ForegroundColor DarkGray
+                $savedCreds = Get-AWSCredential -ProfileName default
+                if ($savedCreds) {
+                    $savedAccessKey = $savedCreds.GetCredentials().AccessKey
+                    Write-Host "[DEBUG] Saved Access Key: $savedAccessKey" -ForegroundColor DarkGray
+                    Write-Host "[DEBUG] Saved Access Key matches input: $($savedAccessKey -eq $accessKey)" -ForegroundColor DarkGray
+
+                    # Check if session token is present for temporary credentials
+                    if ($isTemporary) {
+                        $hasSessionToken = $savedCreds.GetCredentials().Token -ne $null
+                        Write-Host "[DEBUG] Session token was saved: $hasSessionToken" -ForegroundColor DarkGray
+                        if ($hasSessionToken) {
+                            Write-Host "[DEBUG] Saved session token length: $($savedCreds.GetCredentials().Token.Length)" -ForegroundColor DarkGray
+                        }
+                    }
+                }
+            }
+
             # Test new credentials
             Write-Host "Testing credentials..." -ForegroundColor Yellow
             if ($Debug) {
+                Write-Host "[DEBUG] ========== TESTING CREDENTIALS ==========" -ForegroundColor DarkGray
                 Write-Host "[DEBUG] Calling Get-STSCallerIdentity with region: $selectedRegion" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] This makes an AWS STS API call to verify credentials" -ForegroundColor DarkGray
             }
 
-            $caller = Get-STSCallerIdentity -Region $selectedRegion -ErrorAction Stop
-            Write-Host "✓ Credentials valid - Account: $($caller.Account)" -ForegroundColor Green
+            try {
+                $caller = Get-STSCallerIdentity -Region $selectedRegion -ErrorAction Stop
+                Write-Host "✓ Credentials valid - Account: $($caller.Account)" -ForegroundColor Green
+
+                if ($Debug) {
+                    Write-Host "[DEBUG] Caller Identity ARN: $($caller.Arn)" -ForegroundColor DarkGray
+                    Write-Host "[DEBUG] Caller User ID: $($caller.UserId)" -ForegroundColor DarkGray
+                }
+            } catch {
+                # Detailed error analysis
+                if ($Debug) {
+                    Write-Host "[DEBUG] ========== AWS API ERROR DETAILS ==========" -ForegroundColor Red
+                    Write-Host "[DEBUG] Error Type: $($_.Exception.GetType().FullName)" -ForegroundColor DarkGray
+                    Write-Host "[DEBUG] Error Message: $($_.Exception.Message)" -ForegroundColor DarkGray
+
+                    # Check for specific AWS error codes
+                    if ($_.Exception.Message -like "*security token*") {
+                        Write-Host "[DEBUG] ERROR CATEGORY: Invalid Session Token" -ForegroundColor Red
+                        Write-Host "[DEBUG] This typically means:" -ForegroundColor Yellow
+                        Write-Host "[DEBUG]   1. The session token is malformed or truncated" -ForegroundColor Yellow
+                        Write-Host "[DEBUG]   2. The session token has expired" -ForegroundColor Yellow
+                        Write-Host "[DEBUG]   3. The session token doesn't match the access key/secret" -ForegroundColor Yellow
+                    } elseif ($_.Exception.Message -like "*InvalidClientTokenId*") {
+                        Write-Host "[DEBUG] ERROR CATEGORY: Invalid Access Key" -ForegroundColor Red
+                        Write-Host "[DEBUG] The access key ID is not recognized" -ForegroundColor Yellow
+                    } elseif ($_.Exception.Message -like "*SignatureDoesNotMatch*") {
+                        Write-Host "[DEBUG] ERROR CATEGORY: Invalid Secret Key" -ForegroundColor Red
+                        Write-Host "[DEBUG] The secret access key is incorrect" -ForegroundColor Yellow
+                    }
+
+                    # Additional diagnostics
+                    Write-Host "[DEBUG] Attempting to retrieve raw credential values for comparison..." -ForegroundColor DarkGray
+                    $testCreds = Get-AWSCredential -ProfileName default
+                    if ($testCreds) {
+                        $testCredsObject = $testCreds.GetCredentials()
+                        Write-Host "[DEBUG] Retrieved Access Key: $($testCredsObject.AccessKey)" -ForegroundColor DarkGray
+                        Write-Host "[DEBUG] Retrieved Secret Key length: $($testCredsObject.SecretKey.Length)" -ForegroundColor DarkGray
+                        Write-Host "[DEBUG] Retrieved Token length: $(if ($testCredsObject.Token) { $testCredsObject.Token.Length } else { 'NULL' })" -ForegroundColor DarkGray
+
+                        Write-Host "[DEBUG] Original vs Saved comparison:" -ForegroundColor DarkGray
+                        Write-Host "[DEBUG]   Access Key match: $($testCredsObject.AccessKey -eq $accessKey)" -ForegroundColor DarkGray
+                        Write-Host "[DEBUG]   Secret Key match: $($testCredsObject.SecretKey -eq $secretKeyPlain)" -ForegroundColor DarkGray
+                        if ($isTemporary) {
+                            Write-Host "[DEBUG]   Session Token match: $($testCredsObject.Token -eq $sessionToken)" -ForegroundColor DarkGray
+                        }
+                    }
+
+                    Write-Host "[DEBUG] =========================================" -ForegroundColor Red
+                }
+
+                # Re-throw the error to be caught by outer catch block
+                throw
+            }
 
             # Update Region variable for final output
             $Region = $selectedRegion
 
         } catch {
-            Write-Host "✗ Error saving credentials: $_" -ForegroundColor Red
-
-            if ($Debug) {
-                Write-Host "" -ForegroundColor Red
-                Write-Host "[DEBUG] Full error details:" -ForegroundColor DarkGray
-                Write-Host "[DEBUG] Error type: $($_.Exception.GetType().FullName)" -ForegroundColor DarkGray
-                Write-Host "[DEBUG] Error message: $($_.Exception.Message)" -ForegroundColor DarkGray
-                Write-Host "[DEBUG] Stack trace:" -ForegroundColor DarkGray
-                Write-Host $_.Exception.StackTrace -ForegroundColor DarkGray
-
-                if ($_.Exception.InnerException) {
-                    Write-Host "[DEBUG] Inner exception: $($_.Exception.InnerException.Message)" -ForegroundColor DarkGray
-                }
-
-                Write-Host "" -ForegroundColor Red
-                Write-Host "Troubleshooting tips:" -ForegroundColor Yellow
-                Write-Host "  1. Verify Access Key ID has no spaces: '$accessKey'" -ForegroundColor White
-                Write-Host "  2. Check Access Key ID length (should be 20 chars): $($accessKey.Length)" -ForegroundColor White
-                Write-Host "  3. Check Secret Key length (should be 40 chars): $($secretKeyPlain.Length)" -ForegroundColor White
-                if ($isTemporary) {
-                    Write-Host "  4. Check Session Token length (should be 300+ chars): $($sessionToken.Length)" -ForegroundColor White
-                    Write-Host "  5. Verify token hasn't expired - try generating new temporary credentials" -ForegroundColor White
-                } else {
-                    Write-Host "  4. Verify the key is Active in AWS IAM Console" -ForegroundColor White
-                    Write-Host "  5. Try a different region: ./Setup.ps1 -Region us-west-2 -Debug" -ForegroundColor White
-                }
-            }
+            Write-Host "✗ Error testing credentials: $_" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Troubleshooting tips:" -ForegroundColor Yellow
+            Write-Host "  1. Verify credentials are from the AWS Access Portal (SSO)" -ForegroundColor White
+            Write-Host "  2. Ensure all three values (Access Key, Secret, Token) are from the SAME credential set" -ForegroundColor White
+            Write-Host "  3. Copy the session token carefully - it should be 800-900+ characters" -ForegroundColor White
+            Write-Host "  4. Check if credentials have expired (temporary credentials typically last 1-12 hours)" -ForegroundColor White
+            Write-Host "  5. Try generating fresh credentials from AWS Access Portal" -ForegroundColor White
+            Write-Host ""
+            Write-Host "For detailed diagnostics, see the DEBUG output above (if -Debug flag is used)" -ForegroundColor Yellow
         }
     }
 }
