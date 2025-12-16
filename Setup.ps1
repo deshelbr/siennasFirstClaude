@@ -129,13 +129,66 @@ Write-Host ""
 if ($configureCredentials) {
     Write-Host "Would you like to configure AWS credentials now? (Y/n)" -ForegroundColor Yellow
     $configure = Read-Host
-    
+
     if ($configure -ne 'n' -and $configure -ne 'N') {
         Write-Host ""
+
+        # Prompt for region
+        Write-Host "AWS Region Configuration:" -ForegroundColor Cyan
+        Write-Host "Common regions:" -ForegroundColor Gray
+        Write-Host "  1. us-east-1 (US East - N. Virginia)" -ForegroundColor Gray
+        Write-Host "  2. us-west-2 (US West - Oregon)" -ForegroundColor Gray
+        Write-Host "  3. eu-west-1 (Europe - Ireland)" -ForegroundColor Gray
+        Write-Host "  4. ap-southeast-1 (Asia Pacific - Singapore)" -ForegroundColor Gray
+        Write-Host "  5. Other (specify)" -ForegroundColor Gray
+        Write-Host ""
+        $regionChoice = Read-Host "Select region (1-5, or press Enter for default: $Region)"
+
+        $selectedRegion = $Region
+        switch ($regionChoice) {
+            "1" { $selectedRegion = "us-east-1" }
+            "2" { $selectedRegion = "us-west-2" }
+            "3" { $selectedRegion = "eu-west-1" }
+            "4" { $selectedRegion = "ap-southeast-1" }
+            "5" {
+                $selectedRegion = Read-Host "Enter AWS region (e.g., us-west-1, eu-central-1)"
+            }
+            "" { $selectedRegion = $Region }
+            default { $selectedRegion = $regionChoice }
+        }
+
+        Write-Host "Using region: $selectedRegion" -ForegroundColor Green
+        Write-Host ""
+
+        # Prompt for credentials
         Write-Host "Enter your AWS credentials:" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Credential Types:" -ForegroundColor Gray
+        Write-Host "  • Permanent (IAM User): Access Key starts with AKIA" -ForegroundColor Gray
+        Write-Host "  • Temporary (SSO/Assumed Role): Access Key starts with ASIA (requires session token)" -ForegroundColor Gray
+        Write-Host ""
 
         $accessKey = Read-Host "AWS Access Key ID"
         $secretKey = Read-Host "AWS Secret Access Key" -AsSecureString
+
+        # Detect if temporary credentials are needed
+        $isTemporary = $accessKey.StartsWith("ASIA")
+        $sessionToken = $null
+
+        if ($isTemporary) {
+            Write-Host ""
+            Write-Host "⚠ Temporary credentials detected (ASIA prefix)" -ForegroundColor Yellow
+            Write-Host "Session token required for temporary credentials" -ForegroundColor Yellow
+            $sessionTokenSecure = Read-Host "AWS Session Token" -AsSecureString
+
+            $sessionToken = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+                [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sessionTokenSecure)
+            )
+
+            Write-Host ""
+            Write-Host "⚠ Note: Temporary credentials expire (typically 1-12 hours)" -ForegroundColor Yellow
+            Write-Host "You'll need to re-run Setup.ps1 when they expire" -ForegroundColor Yellow
+        }
 
         try {
             if ($Debug) {
@@ -150,21 +203,34 @@ if ($configureCredentials) {
                 Write-Host "[DEBUG] Access Key ID length: $($accessKey.Length) characters" -ForegroundColor DarkGray
                 Write-Host "[DEBUG] Secret Key length: $($secretKeyPlain.Length) characters" -ForegroundColor DarkGray
                 Write-Host "[DEBUG] Access Key ID: $accessKey" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Credential type: $(if ($isTemporary) { 'Temporary (ASIA)' } else { 'Permanent (AKIA)' })" -ForegroundColor DarkGray
+                if ($isTemporary) {
+                    Write-Host "[DEBUG] Session Token length: $($sessionToken.Length) characters" -ForegroundColor DarkGray
+                }
+                Write-Host "[DEBUG] Using region: $selectedRegion" -ForegroundColor DarkGray
                 Write-Host "[DEBUG] Calling Set-AWSCredential with profile 'default'" -ForegroundColor DarkGray
             }
 
-            Set-AWSCredential -AccessKey $accessKey -SecretKey $secretKeyPlain -StoreAs default
+            # Save credentials with or without session token
+            if ($isTemporary) {
+                Set-AWSCredential -AccessKey $accessKey -SecretKey $secretKeyPlain -SessionToken $sessionToken -StoreAs default
+            } else {
+                Set-AWSCredential -AccessKey $accessKey -SecretKey $secretKeyPlain -StoreAs default
+            }
 
             Write-Host "✓ Credentials saved successfully" -ForegroundColor Green
 
             # Test new credentials
             Write-Host "Testing credentials..." -ForegroundColor Yellow
             if ($Debug) {
-                Write-Host "[DEBUG] Calling Get-STSCallerIdentity with region: $Region" -ForegroundColor DarkGray
+                Write-Host "[DEBUG] Calling Get-STSCallerIdentity with region: $selectedRegion" -ForegroundColor DarkGray
             }
 
-            $caller = Get-STSCallerIdentity -Region $Region -ErrorAction Stop
+            $caller = Get-STSCallerIdentity -Region $selectedRegion -ErrorAction Stop
             Write-Host "✓ Credentials valid - Account: $($caller.Account)" -ForegroundColor Green
+
+            # Update Region variable for final output
+            $Region = $selectedRegion
 
         } catch {
             Write-Host "✗ Error saving credentials: $_" -ForegroundColor Red
@@ -186,8 +252,13 @@ if ($configureCredentials) {
                 Write-Host "  1. Verify Access Key ID has no spaces: '$accessKey'" -ForegroundColor White
                 Write-Host "  2. Check Access Key ID length (should be 20 chars): $($accessKey.Length)" -ForegroundColor White
                 Write-Host "  3. Check Secret Key length (should be 40 chars): $($secretKeyPlain.Length)" -ForegroundColor White
-                Write-Host "  4. Verify the key is Active in AWS IAM Console" -ForegroundColor White
-                Write-Host "  5. Try a different region: ./Setup.ps1 -Region us-west-2 -Debug" -ForegroundColor White
+                if ($isTemporary) {
+                    Write-Host "  4. Check Session Token length (should be 300+ chars): $($sessionToken.Length)" -ForegroundColor White
+                    Write-Host "  5. Verify token hasn't expired - try generating new temporary credentials" -ForegroundColor White
+                } else {
+                    Write-Host "  4. Verify the key is Active in AWS IAM Console" -ForegroundColor White
+                    Write-Host "  5. Try a different region: ./Setup.ps1 -Region us-west-2 -Debug" -ForegroundColor White
+                }
             }
         }
     }
