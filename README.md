@@ -11,7 +11,8 @@ Efficiently search through hundreds of thousands of JSON files in AWS S3 by filt
   - Advanced: Uses S3 Select for server-side searching (faster, less data transfer)
 - ✅ **Progress tracking** - Real-time updates on search progress
 - ✅ **CSV export** - Results automatically exported for further analysis
-- ✅ **Download commands** - Ready-to-use AWS CLI commands for retrieving matches
+- ✅ **Automatic downloads** - Optionally download matching files to local folder
+- ✅ **Download commands** - Ready-to-use AWS CLI commands for manual retrieval
 
 ## Prerequisites
 
@@ -66,6 +67,16 @@ Just answer the prompts for bucket name, prefix, search string, and date.
     -TargetDate "2025-10-18" `
     -Region "us-west-1" `
     -MaxParallel 20
+```
+
+**Search and download matching files:**
+```powershell
+./Search-S3JsonFiles.ps1 `
+    -BucketName "my-bucket" `
+    -Prefix "data/" `
+    -SearchString "error_code_123" `
+    -TargetDate "2025-10-18" `
+    -DownloadMatches
 ```
 
 **Search in specific JSON field:**
@@ -133,6 +144,7 @@ Interactive wrapper that guides you through the search process with prompts.
 | TargetDate | Yes | Creation date (yyyy-MM-dd) | - |
 | Region | No | AWS region | us-west-1 |
 | MaxParallel | No | Parallel thread count | 10/20 |
+| DownloadMatches | No | Download matching files locally | false |
 | JsonPath | No | Specific JSON field (Advanced only) | - |
 | UseS3Select | No | Enable S3 Select (Advanced only) | true |
 
@@ -145,17 +157,21 @@ The tool provides:
    - File key (full S3 path)
    - File size
    - Last modified timestamp
-3. **Download commands** - Ready-to-paste AWS CLI commands
+3. **Downloaded files** (if `-DownloadMatches` used) - Saved to `downloads_YYYYMMDD_HHMMSS/` folder
+   - Files preserve their S3 directory structure
+   - Ready for immediate use/analysis
+4. **Download commands** - Ready-to-paste AWS CLI commands for manual retrieval
 
 ## Examples
 
-### Example 1: Find error logs from specific date
+### Example 1: Find and download error logs from specific date
 ```powershell
 ./Search-S3JsonFiles.ps1 `
     -BucketName "app-logs" `
     -Prefix "production/2025/10/" `
     -SearchString "OutOfMemoryException" `
-    -TargetDate "2025-10-18"
+    -TargetDate "2025-10-18" `
+    -DownloadMatches
 ```
 
 ### Example 2: Search for user ID in transaction logs
@@ -165,10 +181,11 @@ The tool provides:
     -Prefix "payments/" `
     -SearchString "user-12345" `
     -TargetDate "2025-10-18" `
-    -JsonPath "s.userId"
+    -JsonPath "s.userId" `
+    -DownloadMatches
 ```
 
-### Example 3: Find configuration files
+### Example 3: Find configuration files (search only, no download)
 ```powershell
 ./Search-S3JsonFiles.ps1 `
     -BucketName "config-backups" `

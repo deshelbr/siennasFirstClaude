@@ -25,8 +25,14 @@
 .PARAMETER MaxParallel
     Maximum number of parallel downloads (default: 10)
 
+.PARAMETER DownloadMatches
+    If specified, downloads all matching files to a local directory
+
 .EXAMPLE
     .\Search-S3JsonFiles.ps1 -BucketName "my-bucket" -Prefix "data/" -SearchString "error123" -TargetDate "2025-10-18"
+
+.EXAMPLE
+    .\Search-S3JsonFiles.ps1 -BucketName "my-bucket" -Prefix "data/" -SearchString "error123" -TargetDate "2025-10-18" -DownloadMatches
 #>
 
 param(
@@ -46,7 +52,10 @@ param(
     [string]$Region = "us-west-1",
     
     [Parameter(Mandatory=$false)]
-    [int]$MaxParallel = 10
+    [int]$MaxParallel = 10,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$DownloadMatches
 )
 
 # Set error action preference
@@ -82,7 +91,18 @@ Write-Host "Prefix: $Prefix" -ForegroundColor White
 Write-Host "Region: $Region" -ForegroundColor White
 Write-Host "Search String: $SearchString" -ForegroundColor White
 Write-Host "Target Date: $TargetDate" -ForegroundColor White
+Write-Host "Download Matches: $DownloadMatches" -ForegroundColor White
 Write-Host ""
+
+# Create download directory if needed
+$downloadDir = $null
+if ($DownloadMatches) {
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $downloadDir = "downloads_$timestamp"
+    New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+    Write-Host "Download directory: $downloadDir" -ForegroundColor Green
+    Write-Host ""
+}
 
 # Step 1: List all objects and filter by date
 Write-Host "[1/3] Listing S3 objects and filtering by date..." -ForegroundColor Yellow
@@ -152,6 +172,7 @@ if ($useParallel) {
         $region = $using:Region
         $search = $using:SearchString
         $bag = $using:matchingFiles
+        $downloadDir = $using:downloadDir
 
         try {
             # Download file content to temp location
@@ -163,12 +184,27 @@ if ($useParallel) {
 
             # Search for string
             if ($content -and $content.Contains($search)) {
+                # Get file size
+                $fileSize = (Get-Item $tempFile).Length
+
                 $result = [PSCustomObject]@{
                     Key = $key
-                    Size = (Get-Item $tempFile).Length
+                    Size = $fileSize
                     Found = $true
                 }
                 $bag.Add($result)
+
+                # Download to persistent location if requested
+                if ($downloadDir) {
+                    $localPath = Join-Path $downloadDir $key
+                    $localDir = Split-Path $localPath -Parent
+
+                    if (-not (Test-Path $localDir)) {
+                        New-Item -ItemType Directory -Path $localDir -Force | Out-Null
+                    }
+
+                    Copy-Item -Path $tempFile -Destination $localPath -Force
+                }
             }
 
             # Clean up temp file
@@ -199,12 +235,27 @@ if ($useParallel) {
 
             # Search for string
             if ($content -and $content.Contains($SearchString)) {
+                # Get file size
+                $fileSize = (Get-Item $tempFile).Length
+
                 $result = [PSCustomObject]@{
                     Key = $key
-                    Size = (Get-Item $tempFile).Length
+                    Size = $fileSize
                     Found = $true
                 }
                 $matchingFiles.Add($result)
+
+                # Download to persistent location if requested
+                if ($downloadDir) {
+                    $localPath = Join-Path $downloadDir $key
+                    $localDir = Split-Path $localPath -Parent
+
+                    if (-not (Test-Path $localDir)) {
+                        New-Item -ItemType Directory -Path $localDir -Force | Out-Null
+                    }
+
+                    Copy-Item -Path $tempFile -Destination $localPath -Force
+                }
             }
 
             # Clean up temp file
@@ -236,19 +287,26 @@ if ($matchingFiles.Count -eq 0) {
 } else {
     Write-Host "Found $($matchingFiles.Count) file(s) containing '$SearchString':" -ForegroundColor Green
     Write-Host ""
-    
+
     foreach ($file in $matchingFiles) {
         Write-Host "  • $($file.Key)" -ForegroundColor Cyan
         Write-Host "    Size: $([Math]::Round($file.Size / 1KB, 2)) KB" -ForegroundColor Gray
     }
-    
+
     # Export results to CSV
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $outputFile = "search_results_$timestamp.csv"
     $matchingFiles | Export-Csv -Path $outputFile -NoTypeInformation
-    
+
     Write-Host ""
     Write-Host "Results exported to: $outputFile" -ForegroundColor Green
+
+    if ($DownloadMatches) {
+        Write-Host ""
+        Write-Host "Matching files downloaded to: $downloadDir" -ForegroundColor Green
+        $totalSize = ($matchingFiles | Measure-Object -Property Size -Sum).Sum
+        Write-Host "Total size: $([Math]::Round($totalSize / 1MB, 2)) MB" -ForegroundColor Green
+    }
 }
 
 Write-Host ""

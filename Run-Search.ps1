@@ -37,6 +37,9 @@ if ([string]::IsNullOrWhiteSpace($maxParallelInput)) {
     $maxParallel = [int]$maxParallelInput
 }
 
+$downloadResponse = Read-Host "Download matching files locally? (Y/n)"
+$downloadMatches = $downloadResponse -ne 'n' -and $downloadResponse -ne 'N'
+
 Write-Host ""
 Write-Host "Starting search with the following parameters:" -ForegroundColor Green
 Write-Host "  Bucket: $bucketName"
@@ -45,6 +48,7 @@ Write-Host "  Search: $searchString"
 Write-Host "  Date: $targetDate"
 Write-Host "  Region: $region"
 Write-Host "  Parallel: $maxParallel"
+Write-Host "  Download: $downloadMatches"
 Write-Host ""
 
 $confirmation = Read-Host "Continue? (Y/n)"
@@ -67,6 +71,10 @@ $params = @{
     TargetDate = $targetDate
     Region = $region
     MaxParallel = $maxParallel
+}
+
+if ($downloadMatches) {
+    $params['DownloadMatches'] = $true
 }
 
 Write-Host ""

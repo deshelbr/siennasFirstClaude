@@ -40,6 +40,9 @@ This is an S3 JSON File Search Tool - a PowerShell-based utility for efficiently
 # Advanced search with S3 Select
 ./Search-S3JsonFiles-Advanced.ps1 -BucketName "bucket" -Prefix "path/" -SearchString "text" -TargetDate "2025-10-18" -MaxParallel 20
 
+# Search and download matching files
+./Search-S3JsonFiles.ps1 -BucketName "bucket" -Prefix "path/" -SearchString "text" -TargetDate "2025-10-18" -DownloadMatches
+
 # Search specific JSON field (Advanced only)
 ./Search-S3JsonFiles-Advanced.ps1 -BucketName "bucket" -Prefix "path/" -SearchString "error" -TargetDate "2025-10-18" -JsonPath "s.errorMessage"
 ```
@@ -95,11 +98,13 @@ Both search scripts follow the same three-phase approach:
    - Advanced: Uses `Select-S3ObjectContent` with SQL expression for server-side search
    - Both use `ForEach-Object -Parallel` with configurable throttle limit (10-20 threads)
    - Results stored in `ConcurrentBag` for thread-safety
+   - If `-DownloadMatches` specified, copies matching files from temp to persistent `downloads_YYYYMMDD_HHMMSS/` directory
 
 3. **Phase 3: Results Export**
    - Displays matching files with metadata (key, size, last modified)
    - Exports results to timestamped CSV: `search_results_YYYYMMDD_HHMMSS.csv`
-   - Generates ready-to-use AWS CLI download commands
+   - If `-DownloadMatches` was used, shows download directory and total size
+   - Otherwise, generates ready-to-use AWS CLI download commands
 
 ### Key Technical Patterns
 
@@ -168,8 +173,11 @@ If scripts fail to run on Windows with syntax errors, check line endings are CRL
 
 ### Output Files
 - CSV exports: `search_results_YYYYMMDD_HHMMSS.csv` (columns: Key, Size, LastModified)
-- Temporary files: Standard method downloads to `[System.IO.Path]::GetTempFileName()` then auto-deletes
-- No persistent local storage except CSV results
+- Downloaded files: `downloads_YYYYMMDD_HHMMSS/` directory (if `-DownloadMatches` specified)
+  - Files preserve S3 directory structure
+  - Standard script: Copies from temp to downloads before cleanup
+  - Advanced script: Downloads matching files when using S3 Select or copies from temp on fallback
+- Temporary files: Standard method downloads to `[System.IO.Path]::GetTempFileName()` then auto-deletes (unless `-DownloadMatches` saves them first)
 
 ## Testing Strategy
 

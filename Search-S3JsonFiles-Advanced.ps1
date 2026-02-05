@@ -29,12 +29,19 @@
 .PARAMETER UseS3Select
     Use S3 Select for server-side filtering (much faster, default: $true)
 
+.PARAMETER DownloadMatches
+    If specified, downloads all matching files to a local directory
+
 .EXAMPLE
     .\Search-S3JsonFiles-Advanced.ps1 -BucketName "my-bucket" -Prefix "data/" -SearchString "error123" -TargetDate "2025-10-18"
 
 .EXAMPLE
     # Search in a specific JSON field
     .\Search-S3JsonFiles-Advanced.ps1 -BucketName "my-bucket" -Prefix "data/" -SearchString "error123" -TargetDate "2025-10-18" -JsonPath "s.logs"
+
+.EXAMPLE
+    # Download matching files
+    .\Search-S3JsonFiles-Advanced.ps1 -BucketName "my-bucket" -Prefix "data/" -SearchString "error123" -TargetDate "2025-10-18" -DownloadMatches
 #>
 
 param(
@@ -60,7 +67,10 @@ param(
     [switch]$UseS3Select,
 
     [Parameter(Mandatory=$false)]
-    [int]$MaxParallel = 20
+    [int]$MaxParallel = 20,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$DownloadMatches
 )
 
 $ErrorActionPreference = "Stop"
@@ -85,7 +95,18 @@ Write-Host "S3 Select: $UseS3Select" -ForegroundColor White
 if ($JsonPath) {
     Write-Host "JSON Path: $JsonPath" -ForegroundColor White
 }
+Write-Host "Download Matches: $DownloadMatches" -ForegroundColor White
 Write-Host ""
+
+# Create download directory if needed
+$downloadDir = $null
+if ($DownloadMatches) {
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $downloadDir = "downloads_$timestamp"
+    New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+    Write-Host "Download directory: $downloadDir" -ForegroundColor Green
+    Write-Host ""
+}
 
 # Step 1: List and filter by date
 Write-Host "[1/3] Filtering S3 objects by date..." -ForegroundColor Yellow
@@ -166,6 +187,7 @@ $filteredKeys | ForEach-Object -Parallel {
     $useSelect = $using:UseS3Select
     $matches = $using:matchingFiles
     $failed = $using:failedS3Select
+    $downloadDir = $using:downloadDir
 
     $found = $false
 
@@ -209,10 +231,39 @@ $filteredKeys | ForEach-Object -Parallel {
             Read-S3Object -BucketName $bucket -Key $fileObj.Key -File $tempFile -Region $region > $null
             $content = Get-Content -Path $tempFile -Raw
             $found = $content.Contains($search)
+
+            # If found and download requested, save to permanent location
+            if ($found -and $downloadDir) {
+                $localPath = Join-Path $downloadDir $fileObj.Key
+                $localDir = Split-Path $localPath -Parent
+
+                if (-not (Test-Path $localDir)) {
+                    New-Item -ItemType Directory -Path $localDir -Force | Out-Null
+                }
+
+                Copy-Item -Path $tempFile -Destination $localPath -Force
+            }
+
             Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
         } catch {
             Write-Warning "Error processing $($fileObj.Key): $_"
             $found = $false
+        }
+    } else {
+        # S3 Select found a match, need to download if requested
+        if ($found -and $downloadDir) {
+            try {
+                $localPath = Join-Path $downloadDir $fileObj.Key
+                $localDir = Split-Path $localPath -Parent
+
+                if (-not (Test-Path $localDir)) {
+                    New-Item -ItemType Directory -Path $localDir -Force | Out-Null
+                }
+
+                Read-S3Object -BucketName $bucket -Key $fileObj.Key -File $localPath -Region $region > $null
+            } catch {
+                Write-Warning "Error downloading $($fileObj.Key): $_"
+            }
         }
     }
 
@@ -249,27 +300,34 @@ if ($matchingFiles.Count -eq 0) {
 } else {
     Write-Host "Found $($matchingFiles.Count) matching file(s):" -ForegroundColor Green
     Write-Host ""
-    
+
     foreach ($file in $matchingFiles | Sort-Object -Property LastModified) {
         Write-Host "  • $($file.Key)" -ForegroundColor Cyan
         Write-Host "    Modified: $($file.LastModified)" -ForegroundColor Gray
         Write-Host "    Size: $([Math]::Round($file.Size / 1KB, 2)) KB" -ForegroundColor Gray
         Write-Host ""
     }
-    
+
     # Export results
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $csvFile = "search_results_$timestamp.csv"
     $matchingFiles | Export-Csv -Path $csvFile -NoTypeInformation
-    
+
     Write-Host "Results exported to: $csvFile" -ForegroundColor Green
     Write-Host ""
-    
-    # Show download commands for easy retrieval
-    Write-Host "To download matching files:" -ForegroundColor Yellow
-    foreach ($file in $matchingFiles) {
-        $filename = Split-Path $file.Key -Leaf
-        Write-Host "  aws s3 cp s3://$BucketName/$($file.Key) ./$filename --region $Region" -ForegroundColor Gray
+
+    if ($DownloadMatches) {
+        Write-Host "Matching files downloaded to: $downloadDir" -ForegroundColor Green
+        $totalSize = ($matchingFiles | Measure-Object -Property Size -Sum).Sum
+        Write-Host "Total size: $([Math]::Round($totalSize / 1MB, 2)) MB" -ForegroundColor Green
+        Write-Host ""
+    } else {
+        # Show download commands for easy retrieval
+        Write-Host "To download matching files:" -ForegroundColor Yellow
+        foreach ($file in $matchingFiles) {
+            $filename = Split-Path $file.Key -Leaf
+            Write-Host "  aws s3 cp s3://$BucketName/$($file.Key) ./$filename --region $Region" -ForegroundColor Gray
+        }
     }
 }
 
