@@ -149,13 +149,14 @@ if ($useParallel) {
 
         $key = $_
         $bucket = $using:BucketName
+        $region = $using:Region
         $search = $using:SearchString
         $bag = $using:matchingFiles
 
         try {
             # Download file content to temp location
             $tempFile = [System.IO.Path]::GetTempFileName()
-            $null = Read-S3Object -BucketName $bucket -Key $key -File $tempFile
+            $null = Read-S3Object -BucketName $bucket -Key $key -File $tempFile -Region $region
 
             # Read content
             $content = Get-Content -Path $tempFile -Raw -ErrorAction SilentlyContinue
@@ -191,7 +192,7 @@ if ($useParallel) {
         try {
             # Download file content to temp location
             $tempFile = [System.IO.Path]::GetTempFileName()
-            $null = Read-S3Object -BucketName $BucketName -Key $key -File $tempFile
+            $null = Read-S3Object -BucketName $BucketName -Key $key -File $tempFile -Region $Region
 
             # Read content
             $content = Get-Content -Path $tempFile -Raw -ErrorAction SilentlyContinue

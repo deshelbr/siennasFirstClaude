@@ -182,6 +182,7 @@ $filteredKeys | ForEach-Object -Parallel {
             $selectParams = @{
                 BucketName = $bucket
                 Key = $fileObj.Key
+                Region = $region
                 Expression = $expression
                 ExpressionType = 'SQL'
                 InputSerialization_JSON_Type = 'DOCUMENT'
@@ -205,7 +206,7 @@ $filteredKeys | ForEach-Object -Parallel {
     if ($null -eq $found) {
         try {
             $tempFile = [System.IO.Path]::GetTempFileName()
-            Read-S3Object -BucketName $bucket -Key $fileObj.Key -File $tempFile > $null
+            Read-S3Object -BucketName $bucket -Key $fileObj.Key -File $tempFile -Region $region > $null
             $content = Get-Content -Path $tempFile -Raw
             $found = $content.Contains($search)
             Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
