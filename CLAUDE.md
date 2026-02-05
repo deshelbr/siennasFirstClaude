@@ -43,6 +43,12 @@ This is an S3 JSON File Search Tool - a PowerShell-based utility for efficiently
 # Search and download matching files
 ./Search-S3JsonFiles.ps1 -BucketName "bucket" -Prefix "path/" -SearchString "text" -TargetDate "2025-10-18" -DownloadMatches
 
+# Search with date range
+./Search-S3JsonFiles.ps1 -BucketName "bucket" -Prefix "path/" -SearchString "text" -StartDate "2025-10-15" -EndDate "2025-10-20"
+
+# Search for two strings (both must be present)
+./Search-S3JsonFiles.ps1 -BucketName "bucket" -Prefix "path/" -SearchString "error" -SearchString2 "timeout" -TargetDate "2025-10-18"
+
 # Search specific JSON field (Advanced only)
 ./Search-S3JsonFiles-Advanced.ps1 -BucketName "bucket" -Prefix "path/" -SearchString "error" -TargetDate "2025-10-18" -JsonPath "s.errorMessage"
 ```
@@ -89,15 +95,21 @@ Both search scripts follow the same three-phase approach:
 
 1. **Phase 1: Date Filtering**
    - Lists all S3 objects with specified prefix using `Get-S3Object`
-   - Filters by `LastModified` timestamp (UTC) matching TargetDate
+   - Filters by `LastModified` timestamp (UTC) matching either:
+     - Single date: `TargetDate` parameter
+     - Date range: `StartDate` to `EndDate` parameters (inclusive)
    - Only includes files with `.json` extension
    - Uses continuation tokens to handle large buckets (1000 objects per request)
 
 2. **Phase 2: Parallel Content Search**
    - Standard: Downloads each file to temp directory using `Read-S3Object`, searches content locally
    - Advanced: Uses `Select-S3ObjectContent` with SQL expression for server-side search
+     - Note: S3 Select is disabled when using `-SearchString2` (dual-string search) due to complexity
    - Both use `ForEach-Object -Parallel` with configurable throttle limit (10-20 threads)
    - Results stored in `ConcurrentBag` for thread-safety
+   - String matching:
+     - Single string: Checks if content contains `SearchString`
+     - Dual string: Checks if content contains BOTH `SearchString` AND `SearchString2` (AND logic)
    - If `-DownloadMatches` specified, copies matching files from temp to persistent `downloads_YYYYMMDD_HHMMSS/` directory
 
 3. **Phase 3: Results Export**
@@ -116,9 +128,16 @@ $matchingFiles = [System.Collections.Concurrent.ConcurrentBag[PSCustomObject]]::
 
 **Date Range Filtering:**
 ```powershell
+# Single date mode
 $targetDateTime = [DateTime]::ParseExact($TargetDate, "yyyy-MM-dd", $null)
 $startOfDay = $targetDateTime.Date
 $endOfDay = $startOfDay.AddDays(1).AddSeconds(-1)
+
+# Date range mode
+$startOfDay = [DateTime]::ParseExact($StartDate, "yyyy-MM-dd", $null).Date
+$endDateTime = [DateTime]::ParseExact($EndDate, "yyyy-MM-dd", $null).Date
+$endOfDay = $endDateTime.AddDays(1).AddSeconds(-1)
+
 # Files filtered: LastModified >= startOfDay AND LastModified <= endOfDay
 ```
 
@@ -126,6 +145,7 @@ $endOfDay = $startOfDay.AddDays(1).AddSeconds(-1)
 - Uses SQL-like syntax: `SELECT * FROM S3Object[*] s WHERE s.field LIKE '%searchstring%'`
 - Automatic fallback to download method if S3 Select fails (malformed JSON)
 - Requires `InputSerialization_JSON_Type = 'DOCUMENT'` for single JSON objects
+- **Limitation:** S3 Select is disabled when using `-SearchString2` parameter (dual-string search requires download method for AND logic)
 
 **PowerShell Script Execution:**
 - All scripts use `#!/usr/bin/env pwsh` shebang for cross-platform compatibility
@@ -168,8 +188,11 @@ If scripts fail to run on Windows with syntax errors, check line endings are CRL
   - Standard: Default 10, safe range 5-20
   - Advanced: Default 20, can go 50-100 on EC2 with good network
   - Too high = out of memory, too low = slow
-- **Date Filtering:** Critical for performance - reduces 100,000s of files to hundreds
+- **Date Filtering:** Critical for performance - reduces 100,000s of files to hundreds or thousands
+  - Single date: Fastest, filters to one day
+  - Date range: Use narrowest range possible for best performance
 - **S3 Select:** 10-100x faster than download method, but requires well-formed JSON
+  - Automatically disabled for dual-string searches (AND logic too complex for S3 Select)
 
 ### Output Files
 - CSV exports: `search_results_YYYYMMDD_HHMMSS.csv` (columns: Key, Size, LastModified)

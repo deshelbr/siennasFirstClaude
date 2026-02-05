@@ -20,7 +20,21 @@ Write-Host ""
 $bucketName = Read-Host "Enter S3 bucket name"
 $prefix = Read-Host "Enter prefix/directory path (e.g. data/ or leave empty)"
 $searchString = Read-Host "Enter the string to search for"
-$targetDate = Read-Host "Enter target date (yyyy-MM-dd e.g. 2025-10-18)"
+$searchString2 = Read-Host "Enter second string (optional - both must be present, or leave empty)"
+
+Write-Host ""
+Write-Host "Date options:" -ForegroundColor Yellow
+$dateMode = Read-Host "Use (S)ingle date or (R)ange? (S/R)"
+
+if ($dateMode -eq 'R' -or $dateMode -eq 'r') {
+    $startDate = Read-Host "Enter start date (yyyy-MM-dd e.g. 2025-10-15)"
+    $endDate = Read-Host "Enter end date (yyyy-MM-dd e.g. 2025-10-20)"
+    $targetDate = $null
+} else {
+    $targetDate = Read-Host "Enter target date (yyyy-MM-dd e.g. 2025-10-18)"
+    $startDate = $null
+    $endDate = $null
+}
 
 Write-Host ""
 Write-Host "Optional settings (press Enter to use defaults):" -ForegroundColor Yellow
@@ -45,7 +59,14 @@ Write-Host "Starting search with the following parameters:" -ForegroundColor Gre
 Write-Host "  Bucket: $bucketName"
 Write-Host "  Prefix: $prefix"
 Write-Host "  Search: $searchString"
-Write-Host "  Date: $targetDate"
+if ($searchString2) {
+    Write-Host "  Search 2: $searchString2 (both required)"
+}
+if ($targetDate) {
+    Write-Host "  Date: $targetDate"
+} else {
+    Write-Host "  Date Range: $startDate to $endDate"
+}
 Write-Host "  Region: $region"
 Write-Host "  Parallel: $maxParallel"
 Write-Host "  Download: $downloadMatches"
@@ -68,9 +89,19 @@ $params = @{
     BucketName = $bucketName
     Prefix = $prefix
     SearchString = $searchString
-    TargetDate = $targetDate
     Region = $region
     MaxParallel = $maxParallel
+}
+
+if ($searchString2) {
+    $params['SearchString2'] = $searchString2
+}
+
+if ($targetDate) {
+    $params['TargetDate'] = $targetDate
+} else {
+    $params['StartDate'] = $startDate
+    $params['EndDate'] = $endDate
 }
 
 if ($downloadMatches) {

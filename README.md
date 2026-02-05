@@ -4,7 +4,8 @@ Efficiently search through hundreds of thousands of JSON files in AWS S3 by filt
 
 ## Features
 
-- ✅ **Date-based filtering** - Quickly narrow down to files created on a specific date
+- ✅ **Date-based filtering** - Single date or date range support for flexible searching
+- ✅ **Multi-string search** - Search for files containing multiple strings (AND logic)
 - ✅ **Parallel processing** - Search multiple files simultaneously for fast results
 - ✅ **Two search methods**:
   - Standard: Downloads and searches files (reliable, works with any JSON)
@@ -79,6 +80,26 @@ Just answer the prompts for bucket name, prefix, search string, and date.
     -DownloadMatches
 ```
 
+**Search for two strings (both must be present):**
+```powershell
+./Search-S3JsonFiles.ps1 `
+    -BucketName "my-bucket" `
+    -Prefix "data/" `
+    -SearchString "error" `
+    -SearchString2 "timeout" `
+    -TargetDate "2025-10-18"
+```
+
+**Search with date range:**
+```powershell
+./Search-S3JsonFiles.ps1 `
+    -BucketName "my-bucket" `
+    -Prefix "data/" `
+    -SearchString "error_code_123" `
+    -StartDate "2025-10-15" `
+    -EndDate "2025-10-20"
+```
+
 **Search in specific JSON field:**
 ```powershell
 ./Search-S3JsonFiles-Advanced.ps1 `
@@ -141,12 +162,17 @@ Interactive wrapper that guides you through the search process with prompts.
 | BucketName | Yes | S3 bucket name | - |
 | Prefix | Yes | Directory path in bucket | - |
 | SearchString | Yes | Text to search for | - |
-| TargetDate | Yes | Creation date (yyyy-MM-dd) | - |
+| SearchString2 | No | Second string (both must be present) | - |
+| TargetDate | No* | Single date (yyyy-MM-dd) | - |
+| StartDate | No* | Start of date range (yyyy-MM-dd) | - |
+| EndDate | No* | End of date range (yyyy-MM-dd) | - |
 | Region | No | AWS region | us-west-1 |
 | MaxParallel | No | Parallel thread count | 10/20 |
 | DownloadMatches | No | Download matching files locally | false |
 | JsonPath | No | Specific JSON field (Advanced only) | - |
 | UseS3Select | No | Enable S3 Select (Advanced only) | true |
+
+\* Must specify either `TargetDate` (single day) OR `StartDate`/`EndDate` (range). `StartDate` and `EndDate` must be used together.
 
 ## Output
 
@@ -174,25 +200,37 @@ The tool provides:
     -DownloadMatches
 ```
 
-### Example 2: Search for user ID in transaction logs
+### Example 2: Search for user ID in transaction logs with date range
 ```powershell
 ./Search-S3JsonFiles-Advanced.ps1 `
     -BucketName "transactions" `
     -Prefix "payments/" `
     -SearchString "user-12345" `
-    -TargetDate "2025-10-18" `
+    -StartDate "2025-10-15" `
+    -EndDate "2025-10-20" `
     -JsonPath "s.userId" `
     -DownloadMatches
 ```
 
-### Example 3: Find configuration files (search only, no download)
+### Example 3: Find files with multiple strings (AND logic)
+```powershell
+./Search-S3JsonFiles.ps1 `
+    -BucketName "app-logs" `
+    -Prefix "errors/" `
+    -SearchString "timeout" `
+    -SearchString2 "database" `
+    -TargetDate "2025-10-18"
+```
+
+### Example 4: Search date range for configuration issues
 ```powershell
 ./Search-S3JsonFiles.ps1 `
     -BucketName "config-backups" `
     -Prefix "configs/" `
     -SearchString "database.connection.timeout" `
-    -TargetDate "2025-10-18" `
-    -MaxParallel 5
+    -StartDate "2025-10-01" `
+    -EndDate "2025-10-31" `
+    -MaxParallel 15
 ```
 
 ## Troubleshooting

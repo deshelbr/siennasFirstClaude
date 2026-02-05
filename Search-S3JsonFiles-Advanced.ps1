@@ -17,8 +17,17 @@
 .PARAMETER SearchString
     The string to search for in JSON file contents
 
+.PARAMETER SearchString2
+    Optional second string - only returns files containing BOTH strings
+
 .PARAMETER TargetDate
-    Filter files created on this date (format: yyyy-MM-dd)
+    Filter files created on this date (format: yyyy-MM-dd). Cannot be used with StartDate/EndDate.
+
+.PARAMETER StartDate
+    Start of date range (format: yyyy-MM-dd). Must be used with EndDate.
+
+.PARAMETER EndDate
+    End of date range (format: yyyy-MM-dd). Must be used with StartDate.
 
 .PARAMETER JsonPath
     Optional: JSON path to search within (e.g., "s.errorMessage" for nested field)
@@ -42,6 +51,14 @@
 .EXAMPLE
     # Download matching files
     .\Search-S3JsonFiles-Advanced.ps1 -BucketName "my-bucket" -Prefix "data/" -SearchString "error123" -TargetDate "2025-10-18" -DownloadMatches
+
+.EXAMPLE
+    # Search for two strings (both must be present)
+    .\Search-S3JsonFiles-Advanced.ps1 -BucketName "my-bucket" -Prefix "data/" -SearchString "error" -SearchString2 "timeout" -TargetDate "2025-10-18"
+
+.EXAMPLE
+    # Search with date range
+    .\Search-S3JsonFiles-Advanced.ps1 -BucketName "my-bucket" -Prefix "data/" -SearchString "error123" -StartDate "2025-10-15" -EndDate "2025-10-20"
 #>
 
 param(
@@ -54,8 +71,17 @@ param(
     [Parameter(Mandatory=$true, Position=2)]
     [string]$SearchString,
 
-    [Parameter(Mandatory=$true, Position=3)]
+    [Parameter(Mandatory=$false)]
+    [string]$SearchString2,
+
+    [Parameter(Mandatory=$false, Position=3)]
     [string]$TargetDate,
+
+    [Parameter(Mandatory=$false)]
+    [string]$StartDate,
+
+    [Parameter(Mandatory=$false)]
+    [string]$EndDate,
 
     [Parameter(Mandatory=$false)]
     [string]$JsonPath,
@@ -75,13 +101,37 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Validate date parameters
+if ($TargetDate -and ($StartDate -or $EndDate)) {
+    Write-Error "Cannot use TargetDate with StartDate/EndDate. Use either TargetDate (single day) OR StartDate/EndDate (date range)."
+    exit 1
+}
+
+if (($StartDate -and -not $EndDate) -or ($EndDate -and -not $StartDate)) {
+    Write-Error "StartDate and EndDate must be used together."
+    exit 1
+}
+
+if (-not $TargetDate -and -not $StartDate) {
+    Write-Error "Must specify either TargetDate (single day) or StartDate/EndDate (date range)."
+    exit 1
+}
+
 # Import AWS module
 Import-Module AWS.Tools.S3 -ErrorAction Stop
 
-# Parse target date
-$targetDateTime = [DateTime]::ParseExact($TargetDate, "yyyy-MM-dd", $null)
-$startOfDay = $targetDateTime.Date
-$endOfDay = $startOfDay.AddDays(1).AddSeconds(-1)
+# Parse date parameters
+if ($TargetDate) {
+    $targetDateTime = [DateTime]::ParseExact($TargetDate, "yyyy-MM-dd", $null)
+    $startOfDay = $targetDateTime.Date
+    $endOfDay = $startOfDay.AddDays(1).AddSeconds(-1)
+    $dateRangeText = $TargetDate
+} else {
+    $startOfDay = [DateTime]::ParseExact($StartDate, "yyyy-MM-dd", $null).Date
+    $endDateTime = [DateTime]::ParseExact($EndDate, "yyyy-MM-dd", $null).Date
+    $endOfDay = $endDateTime.AddDays(1).AddSeconds(-1)
+    $dateRangeText = "$StartDate to $EndDate"
+}
 
 Write-Host "==================================" -ForegroundColor Cyan
 Write-Host "Advanced S3 JSON Search Tool" -ForegroundColor Cyan
@@ -90,7 +140,10 @@ Write-Host "Bucket: $BucketName" -ForegroundColor White
 Write-Host "Prefix: $Prefix" -ForegroundColor White
 Write-Host "Region: $Region" -ForegroundColor White
 Write-Host "Search String: $SearchString" -ForegroundColor White
-Write-Host "Target Date: $TargetDate" -ForegroundColor White
+if ($SearchString2) {
+    Write-Host "Search String 2: $SearchString2 (both required)" -ForegroundColor White
+}
+Write-Host "Date Range: $dateRangeText" -ForegroundColor White
 Write-Host "S3 Select: $UseS3Select" -ForegroundColor White
 if ($JsonPath) {
     Write-Host "JSON Path: $JsonPath" -ForegroundColor White
@@ -158,11 +211,11 @@ do {
 } while ($continuationToken)
 
 Write-Host "  Total objects scanned: $totalObjects" -ForegroundColor Green
-Write-Host "  Files matching date: $($filteredKeys.Count)" -ForegroundColor Green
+Write-Host "  Files matching date range ($dateRangeText): $($filteredKeys.Count)" -ForegroundColor Green
 Write-Host ""
 
 if ($filteredKeys.Count -eq 0) {
-    Write-Host "No JSON files found for the specified date." -ForegroundColor Red
+    Write-Host "No JSON files found for the specified date range." -ForegroundColor Red
     exit 0
 }
 
@@ -183,6 +236,7 @@ $filteredKeys | ForEach-Object -Parallel {
     $bucket = $using:BucketName
     $region = $using:Region
     $search = $using:SearchString
+    $search2 = $using:SearchString2
     $jsonPath = $using:JsonPath
     $useSelect = $using:UseS3Select
     $matches = $using:matchingFiles
@@ -191,8 +245,8 @@ $filteredKeys | ForEach-Object -Parallel {
 
     $found = $false
 
-    # Try S3 Select first if enabled
-    if ($useSelect) {
+    # Try S3 Select first if enabled (but not if searching for two strings - too complex for S3 Select)
+    if ($useSelect -and -not $search2) {
         try {
             # Build S3 Select query
             if ($jsonPath) {
@@ -224,13 +278,20 @@ $filteredKeys | ForEach-Object -Parallel {
         }
     }
 
-    # Fall back to download if S3 Select not used or failed
+    # Fall back to download if S3 Select not used or failed, or if using second search string
     if ($null -eq $found) {
         try {
             $tempFile = [System.IO.Path]::GetTempFileName()
             Read-S3Object -BucketName $bucket -Key $fileObj.Key -File $tempFile -Region $region > $null
             $content = Get-Content -Path $tempFile -Raw
-            $found = $content.Contains($search)
+
+            # Search for string(s)
+            $foundFirst = $content.Contains($search)
+            $found = $foundFirst
+
+            if ($foundFirst -and $search2) {
+                $found = $content.Contains($search2)
+            }
 
             # If found and download requested, save to permanent location
             if ($found -and $downloadDir) {
@@ -289,6 +350,10 @@ if ($failedS3Select.Count -gt 0) {
     Write-Host "  Note: $($failedS3Select.Count) files required download fallback" -ForegroundColor Yellow
 }
 
+if ($SearchString2) {
+    Write-Host "  Note: Dual-string search used download method (S3 Select not supported for AND logic)" -ForegroundColor Yellow
+}
+
 Write-Host ""
 
 # Step 3: Display results
@@ -296,9 +361,17 @@ Write-Host "[3/3] Results:" -ForegroundColor Yellow
 Write-Host ""
 
 if ($matchingFiles.Count -eq 0) {
-    Write-Host "No files found containing '$SearchString'" -ForegroundColor Red
+    if ($SearchString2) {
+        Write-Host "No files found containing both '$SearchString' AND '$SearchString2'" -ForegroundColor Red
+    } else {
+        Write-Host "No files found containing '$SearchString'" -ForegroundColor Red
+    }
 } else {
-    Write-Host "Found $($matchingFiles.Count) matching file(s):" -ForegroundColor Green
+    if ($SearchString2) {
+        Write-Host "Found $($matchingFiles.Count) file(s) containing both '$SearchString' AND '$SearchString2':" -ForegroundColor Green
+    } else {
+        Write-Host "Found $($matchingFiles.Count) matching file(s):" -ForegroundColor Green
+    }
     Write-Host ""
 
     foreach ($file in $matchingFiles | Sort-Object -Property LastModified) {
