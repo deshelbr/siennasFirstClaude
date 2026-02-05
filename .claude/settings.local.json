@@ -4,7 +4,22 @@
       "Bash(pwsh:*)",
       "Bash(unix2dos:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cat:*)",
+      "Bash(dd:*)",
+      "Bash(sync)",
+      "Bash(done)",
+      "Bash(dos2unix:*)",
+      "Bash(python3:*)",
+      "Bash(/c/Python314/python:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(git checkout:*)",
+      "Bash(findstr:*)",
+      "Bash(powershell -File:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File fix-runsearch.ps1)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(git push)",
+      "Bash(aws s3api get-bucket-location:*)"
     ],
     "deny": [],
     "ask": []

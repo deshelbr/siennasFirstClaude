@@ -66,6 +66,9 @@ if (-not $useParallel) {
     Write-Host ""
 }
 
+# Import AWS module
+Import-Module AWS.Tools.S3 -ErrorAction Stop
+
 # Parse target date
 $targetDateTime = [DateTime]::ParseExact($TargetDate, "yyyy-MM-dd", $null)
 $startOfDay = $targetDateTime.Date
